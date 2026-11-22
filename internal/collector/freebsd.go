@@ -111,7 +111,7 @@ func (c *FreeBSDCollector) Collect() (*Snapshot, error) {
 	}
 
 	// 7. Kea DHCPv4 leases (active counts + hostnames)
-	if data, err := os.ReadFile(c.Cfg.KeaLeasesFile); err == nil {
+	if data := readKeaLeaseFiles(c.Cfg.KeaLeasesFile); len(data) > 0 {
 		snap.Leases = ParseKeaLeases(data, now.Unix())
 	}
 
@@ -224,4 +224,26 @@ func readUnixSocket(path string, timeout time.Duration) (string, error) {
 	_ = conn.SetDeadline(time.Now().Add(timeout))
 	b, err := io.ReadAll(io.LimitReader(conn, 4096))
 	return string(b), err
+}
+
+// readKeaLeaseFiles concatenates a Kea memfile lease file with the files its
+// lease file cleanup (LFC) leaves behind, oldest first, in the order Kea itself
+// loads them on startup: <file>.completed then <file> when LFC finished, else
+// <file>.2, <file>.1, then <file>. After a cleanup most live leases sit in the
+// older files and <file> holds only the header plus recent changes.
+func readKeaLeaseFiles(path string) []byte {
+	files := []string{path + ".2", path + ".1", path}
+	if _, err := os.Stat(path + ".completed"); err == nil {
+		files = []string{path + ".completed", path}
+	}
+	var buf []byte
+	for _, f := range files {
+		if data, err := os.ReadFile(f); err == nil {
+			buf = append(buf, data...)
+			if len(data) > 0 && data[len(data)-1] != '\n' {
+				buf = append(buf, '\n')
+			}
+		}
+	}
+	return buf
 }

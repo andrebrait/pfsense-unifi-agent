@@ -1,6 +1,8 @@
 package collector
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -236,5 +238,38 @@ fe80::200:ff:fe00:201%ixl1           02:00:00:00:02:01   ixl1 17h       S
 	}
 	if activeLeases, ok := payload["ipv4_active_leases"].([]map[string]any); !ok || len(activeLeases) != 2 {
 		t.Fatalf("expected 2 ipv4_active_leases, got %#v", payload["ipv4_active_leases"])
+	}
+}
+
+func TestKeaLeaseFilesAfterCleanup(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "dhcp4.leases")
+	header := "address,hwaddr,client_id,valid_lifetime,expire,subnet_id,fqdn_fwd,fqdn_rev,hostname,state,user_context,pool_id\n"
+	// LFC output holds the live leases; the current file has only the header
+	// and a later expiry of 10.0.1.3 (no trailing newline).
+	files := map[string]string{
+		path + ".2": header +
+			"10.0.1.2,02:00:00:00:04:02,,7200,2000000000,1,0,0,old-host,0,,0\n" +
+			"10.0.1.3,02:00:00:00:04:03,,7200,2000000000,1,0,0,gone,0,,0\n",
+		path + ".1": header + "10.0.1.4,02:00:00:00:04:04,,7200,2000000000,1,0,0,new-host,0,,0\n",
+		path:        header + "10.0.1.3,02:00:00:00:04:03,,0,1000,1,0,0,gone,0,,0",
+	}
+	for f, data := range files {
+		if err := os.WriteFile(f, []byte(data), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	leases := ParseKeaLeases(readKeaLeaseFiles(path), 1900000000)
+	if len(leases) != 2 {
+		t.Fatalf("expected 2 active leases from .2/.1/current, got %+v", leases)
+	}
+
+	// Once LFC completes, Kea loads only <file>.completed and <file>.
+	if err := os.WriteFile(path+".completed", []byte(header+"10.0.1.9,02:00:00:00:04:09,,7200,2000000000,1,0,0,c,0,,0\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	leases = ParseKeaLeases(readKeaLeaseFiles(path), 1900000000)
+	if len(leases) != 1 || leases[0].IP != "10.0.1.9" {
+		t.Fatalf("expected only the .completed lease, got %+v", leases)
 	}
 }

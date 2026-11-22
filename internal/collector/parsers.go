@@ -430,7 +430,9 @@ func ParseLLDP(data []byte) ([]LLDPNeighbor, error) {
 	return out, nil
 }
 
-// ParseKeaLeases parses Kea's append-only DHCPv4 CSV lease file (/var/db/kea/dhcp4.leases).
+// ParseKeaLeases parses Kea's append-only DHCPv4 CSV lease file (/var/db/kea/dhcp4.leases),
+// possibly several such files concatenated oldest first; repeated header rows are skipped
+// and the last record for an address wins.
 func ParseKeaLeases(data []byte, nowUnix int64) []DHCPLease {
 	r := csv.NewReader(bytes.NewReader(data))
 	r.FieldsPerRecord = -1
@@ -469,6 +471,9 @@ func ParseKeaLeases(data []byte, nowUnix int64) []DHCPLease {
 			continue
 		}
 		ip := strings.TrimSpace(rec[idxAddr])
+		if ip == "address" {
+			continue
+		}
 		mac := strings.ToLower(strings.TrimSpace(rec[idxHW]))
 		exp, _ := strconv.ParseInt(strings.TrimSpace(rec[idxExp]), 10, 64)
 		state, _ := strconv.Atoi(strings.TrimSpace(rec[idxState]))
