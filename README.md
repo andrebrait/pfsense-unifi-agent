@@ -32,10 +32,10 @@ Output binary: `bin/pfsense-unifi-agent-freebsd-amd64`.
    ```sh
    scp -P 2223 bin/pfsense-unifi-agent-freebsd-amd64 root@firewall:/usr/local/sbin/pfsense-unifi-agent
    scp -P 2223 config.example.json root@firewall:/usr/local/etc/pfsense-unifi-agent.json
-   scp -P 2223 rc.d/pfsense_unifi_agent root@firewall:/usr/local/etc/rc.d/pfsense_unifi_agent
+   scp -P 2223 rc.d/pfsense_unifi_agent rc.d/pfsense_unifi_agent.sh root@firewall:/usr/local/etc/rc.d/
    ```
 
-2. Edit `/usr/local/etc/pfsense-unifi-agent.json` (`inform_url` must use an IP literal, e.g. `http://10.0.0.4:8080/inform`).
+2. Edit `/usr/local/etc/pfsense-unifi-agent.json` (`inform_url` must use an IP literal, e.g. `http://10.0.0.200:8080/inform`).
 3. Sanity-check collected telemetry before running:
 
    ```sh
@@ -43,10 +43,10 @@ Output binary: `bin/pfsense-unifi-agent-freebsd-amd64`.
    /usr/local/sbin/pfsense-unifi-agent dump
    ```
 
-4. Start and enable via `rc.conf.local` (or pfSense Shellcmd package so it survives upgrades):
+4. Enable and start the service (pfSense invokes `/usr/local/etc/rc.d/*.sh` at boot):
 
    ```sh
-   chmod +x /usr/local/sbin/pfsense-unifi-agent /usr/local/etc/rc.d/pfsense_unifi_agent
+   chmod +x /usr/local/sbin/pfsense-unifi-agent /usr/local/etc/rc.d/pfsense_unifi_agent /usr/local/etc/rc.d/pfsense_unifi_agent.sh
    sysrc -f /etc/rc.conf.local pfsense_unifi_agent_enable=YES
    service pfsense_unifi_agent start
    ```
