@@ -1,0 +1,16 @@
+{
+  "inform_url": "http://10.0.0.4:8080/inform",
+  "model": "UXGA6AA",
+  "primary_lan_if": "ixl1",
+  "primary_wan_if": "pppoe0",
+  "dpinger_gateway": "WAN_PPPOE",
+  "state_file": "/var/db/pfsense-unifi-agent/state.json",
+  "interval_sec": 10,
+  "ports": [
+    { "port_idx": 1, "device": "vtnet0", "role": "lan", "label": "DOCKER" },
+    { "port_idx": 2, "device": "vtnet1", "role": "lan", "label": "STAGING_VM" },
+    { "port_idx": 3, "device": "vtnet2", "role": "lan", "label": "STAGING_VM_MGT" },
+    { "port_idx": 6, "device": "ixl1",   "role": "lan", "media": "SFP+", "label": "LAN" },
+    { "port_idx": 7, "device": "ixl0",   "wan_if": "pppoe0", "role": "wan", "media": "SFP+", "label": "WAN_SFP" }
+  ]
+}

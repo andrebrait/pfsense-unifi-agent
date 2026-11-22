@@ -1,0 +1,22 @@
+#!/bin/sh
+#
+# PROVIDE: pfsense_unifi_agent
+# REQUIRE: NETWORKING
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="pfsense_unifi_agent"
+rcvar="pfsense_unifi_agent_enable"
+
+load_rc_config $name
+
+: ${pfsense_unifi_agent_enable:="NO"}
+: ${pfsense_unifi_agent_config:="/usr/local/etc/pfsense-unifi-agent.json"}
+
+pidfile="/var/run/${name}.pid"
+command="/usr/sbin/daemon"
+procname="/usr/local/sbin/pfsense-unifi-agent"
+command_args="-f -P ${pidfile} -r -T ${name} ${procname} run -config ${pfsense_unifi_agent_config}"
+
+run_rc_command "$1"
