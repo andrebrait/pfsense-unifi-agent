@@ -299,7 +299,7 @@ func BuildPayload(cfg *config.Config, spec models.ModelSpec, snap *Snapshot) (ma
 			"speed_caps":  ps.SpeedCaps,
 			"poe_caps":    0,
 			"port_poe":    false,
-			"enable":      false,
+			"enable":      true,
 			"up":          false,
 			"speed":       0,
 			"full_duplex": false,
@@ -663,8 +663,8 @@ func BuildPayload(cfg *config.Config, spec models.ModelSpec, snap *Snapshot) (ma
 			"services/dhcp-servers": 10,
 		},
 		"gw_caps":     0,
-		"usg_caps":    2048, // PORT_REASSIGNMENT: allows reassigning WAN1/WAN2/LAN ports in UniFi UI
-		"usg2_caps":   0,
+		"usg_caps":    2048,   // PORT_REASSIGNMENT: allows reassigning WAN1/WAN2/LAN ports in UniFi UI
+		"usg2_caps":   131072, // ALL_SWITCH_PORTS_REMAP: required on switch-capable UXGs (UXGA6AA) for WAN remap
 		"switch_caps": map[string]any{"feature_caps": 0},
 		"has_fan":     false,
 		"overheating": false,

@@ -224,8 +224,8 @@ pppoe0: flags=1008851<UP,POINTOPOINT,RUNNING,SIMPLEX,MULTICAST,LOWER_UP> metric 
 	p5 := pt[4].(map[string]any)
 	p6 := pt[5].(map[string]any)
 	p7 := pt[6].(map[string]any)
-	if p4["enable"] != false || p5["enable"] != false {
-		t.Fatalf("expected ports 4 & 5 disabled, got p4=%v p5=%v", p4["enable"], p5["enable"])
+	if p4["up"] != false || p5["up"] != false {
+		t.Fatalf("expected ports 4 & 5 down, got p4=%v p5=%v", p4["up"], p5["up"])
 	}
 	if p6["speed"] != float64(10000) || p6["sfp_vendor"] != "10Gtek" {
 		t.Fatalf("unexpected port 6 (ixl1): %v", p6)

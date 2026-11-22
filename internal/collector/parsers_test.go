@@ -187,9 +187,9 @@ func TestParsersAndBuildPayload(t *testing.T) {
 	if len(ports) != 7 {
 		t.Fatalf("expected 7 UXGA6AA ports, got %d", len(ports))
 	}
-	// Port 2 unmapped -> disabled
-	if ports[1]["enable"] != false || ports[1]["up"] != false {
-		t.Fatalf("expected port 2 disabled, got %+v", ports[1])
+	// Port 2 unmapped -> disconnected (up=false, enable=true so UniFi UI does not lock the port)
+	if ports[1]["enable"] != true || ports[1]["up"] != false {
+		t.Fatalf("expected port 2 disconnected, got %+v", ports[1])
 	}
 	// Port 6 (ixl1) -> name=eth5, 3 MACs (VLAN 1, 2, 30) + 1 LLDP neighbor
 	if ports[5]["name"] != "eth5" || ports[5]["speed"] != 10000 {
