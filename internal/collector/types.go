@@ -663,6 +663,7 @@ func BuildPayload(cfg *config.Config, spec models.ModelSpec, snap *Snapshot) (ma
 			"services/dhcp-servers": 10,
 		},
 		"gw_caps":     0,
+		"usg_caps":    2048, // PORT_REASSIGNMENT: allows reassigning WAN1/WAN2/LAN ports in UniFi UI
 		"usg2_caps":   0,
 		"switch_caps": map[string]any{"feature_caps": 0},
 		"has_fan":     false,
