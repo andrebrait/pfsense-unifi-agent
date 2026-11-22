@@ -13,6 +13,8 @@ load_rc_config $name
 
 : ${pfsense_unifi_agent_enable:="NO"}
 : ${pfsense_unifi_agent_config:="/usr/local/etc/pfsense-unifi-agent.json"}
+# rc(8) runs services with PATH=/sbin:/bin:/usr/sbin:/usr/bin; lldpcli lives in /usr/local/sbin.
+: ${pfsense_unifi_agent_env:="PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin"}
 
 pidfile="/var/run/${name}.pid"
 command="/usr/sbin/daemon"
