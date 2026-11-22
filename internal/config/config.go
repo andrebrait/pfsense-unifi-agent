@@ -34,7 +34,6 @@ type Config struct {
 	StateFile       string        `json:"state_file,omitempty"`       // Default: "/var/db/pfsense-unifi-agent/state.json"
 	PfSenseConfig   string        `json:"pfsense_config,omitempty"`   // Default: "/cf/conf/config.xml"
 	KeaLeasesFile   string        `json:"kea_leases_file,omitempty"`  // Default: "/var/db/kea/dhcp4.leases"
-	ISCLeasesFile   string        `json:"isc_leases_file,omitempty"`  // Default: "/var/dhcpd/var/db/dhcpd.leases"
 	DpingerSockGlob string        `json:"dpinger_sock_glob,omitempty"`// Default: "/var/run/dpinger_*.sock"
 	IntervalSec     int           `json:"interval_sec,omitempty"`     // Default: 10 (overridden by controller noop interval)
 	Ports           []PortMapping `json:"ports"`
@@ -78,9 +77,6 @@ func (c *Config) ApplyDefaults() {
 	}
 	if c.KeaLeasesFile == "" {
 		c.KeaLeasesFile = "/var/db/kea/dhcp4.leases"
-	}
-	if c.ISCLeasesFile == "" {
-		c.ISCLeasesFile = "/var/dhcpd/var/db/dhcpd.leases"
 	}
 	if c.DpingerSockGlob == "" {
 		c.DpingerSockGlob = "/var/run/dpinger_*.sock"
