@@ -21,6 +21,8 @@ const sampleIfconfig = `ixl0: flags=1008843<UP,BROADCAST,RUNNING,SIMPLEX,MULTICA
 ixl1: flags=1008843<UP,BROADCAST,RUNNING,SIMPLEX,MULTICAST,LOWER_UP> metric 0 mtu 1500
 	ether 02:00:00:00:01:02
 	inet 10.0.0.1 netmask 0xffff0000 broadcast 10.0.255.255
+	inet6 fe80::200:ff:fe00:102%ixl1 prefixlen 64 scopeid 0x2
+	inet6 2001:db8:abcd:beef:200:ff:fe00:102 prefixlen 64
 	media: Ethernet autoselect (10Gbase-Twinax <full-duplex>)
 	status: active
 	plugged: SFP/SFP+/SFP28 Unknown (Copper pigtail)
@@ -33,6 +35,7 @@ vtnet0: flags=1008843<UP,BROADCAST,RUNNING,SIMPLEX,MULTICAST,LOWER_UP> metric 0 
 ixl1.2: flags=1008843<UP,BROADCAST,RUNNING,SIMPLEX,MULTICAST,LOWER_UP> metric 0 mtu 1500
 	ether 02:00:00:00:01:02
 	inet 10.1.0.1 netmask 0xffff0000 broadcast 10.1.255.255
+	inet6 2001:db8:abcd:ffff:200:ff:fe00:102 prefixlen 64
 	vlan: 2 vlanproto: 802.1q vlanpcp: 0 parent interface: ixl1
 	media: Ethernet autoselect (10Gbase-Twinax <full-duplex>)
 	status: active
@@ -44,6 +47,7 @@ ixl1.30: flags=1008843<UP,BROADCAST,RUNNING,SIMPLEX,MULTICAST,LOWER_UP> metric 0
 	status: active
 pppoe0: flags=1008851<UP,POINTOPOINT,RUNNING,SIMPLEX,MULTICAST,LOWER_UP> metric 0 mtu 1500
 	inet 203.0.113.10 --> 203.0.113.1 netmask 0xffffffff
+	inet6 fe80::200:ff:fe00:100%pppoe0 --> fe80::c65e:5cff:fe24:2019%pppoe0 prefixlen 128 scopeid 0x11
 `
 
 const sampleNetstat = `Name         Mtu Network                               Address                                            Ipkts       Ierrs       Idrop         Ibytes            Opkts       Oerrs         Obytes        Coll
@@ -128,6 +132,27 @@ func TestParsersAndBuildPayload(t *testing.T) {
 		t.Fatalf("expected 4 dynamic arp entries, got %d: %+v", len(arps), arps)
 	}
 
+	const sampleNDP = `Neighbor                             Linklayer Address  Netif Expire    S Flags
+fe80::200:ff:fe00:100%ixl0           02:00:00:00:01:00   ixl0 permanent R
+2001:db8:abcd:beef::1010             02:00:00:00:02:01   ixl1 12s       R
+2001:db8:abcd:ffff::50               02:00:00:00:ee:02 ixl1.2 10m       S
+fe80::200:ff:fe00:201%ixl1           02:00:00:00:02:01   ixl1 17h       S
+`
+	ndps := ParseNDP(sampleNDP)
+	if len(ndps) != 2 {
+		t.Fatalf("expected 2 global ndp entries, got %d: %+v", len(ndps), ndps)
+	}
+
+	const sampleDhcp6c = `
+	prefix-interface ixl1 {
+		sla-len 16;
+	};
+`
+	pds := ParseDHCPv6PD([]byte(sampleDhcp6c), ifaces)
+	if len(pds) != 1 || pds[0] != "2001:db8:abcd::/48" {
+		t.Fatalf("expected [2001:db8:abcd::/48], got %v", pds)
+	}
+
 	lldps, err := ParseLLDP([]byte(sampleLLDP))
 	if err != nil || len(lldps) != 1 || lldps[0].ChassisID != "02:00:00:00:02:01" || lldps[0].PortDescr != "lan6" {
 		t.Fatalf("unexpected lldp: %+v err=%v", lldps, err)
@@ -167,8 +192,10 @@ func TestParsersAndBuildPayload(t *testing.T) {
 		Sys:          SysInfo{Hostname: "pfsense.example", KernelVersion: "16.0-CURRENT", Architecture: "amd64", UptimeSec: 10000, Load1: "0.49", Load5: "0.36", Load15: "0.27", CPUPct: 3.2, MemTotal: 6306570240, MemUsed: 2000000000},
 		Ifaces:       ifaces,
 		ARP:          arps,
+		NDP:          ndps,
 		LLDP:         lldps,
 		Leases:       leases,
+		DHCPv6PD:     pds,
 		Dpinger:      []DpingerStat{dp},
 		DefaultGW:    "203.0.113.1",
 		Nameservers:  []string{"1.1.1.1"},
@@ -198,6 +225,10 @@ func TestParsersAndBuildPayload(t *testing.T) {
 	p6Macs := ports[5]["mac_table"].([]map[string]any)
 	if len(p6Macs) != 3 {
 		t.Fatalf("expected 3 macs on port 6 across VLANs 1/2/30, got %d: %+v", len(p6Macs), p6Macs)
+	}
+	p6MacsV6 := ports[5]["mac_table_ipv6"].([]map[string]any)
+	if len(p6MacsV6) != 2 {
+		t.Fatalf("expected 2 IPv6 macs on port 6 across VLANs 1/2, got %d: %+v", len(p6MacsV6), p6MacsV6)
 	}
 	// Port 7 (ixl0) -> Zaram SFP DOM
 	if ports[6]["sfp_vendor"] != "Zaram" || ports[6]["sfp_rxpower"] != "-15.62" {

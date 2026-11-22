@@ -74,9 +74,15 @@ func (c *FreeBSDCollector) Collect() (*Snapshot, error) {
 		}
 	}
 
-	// 5. ARP table -> learned MACs + IPs per port/VLAN
+	// 5. ARP (IPv4) and NDP (IPv6) neighbor tables -> learned MACs + IPs per port/VLAN
 	if out, err := runCmd(5*time.Second, "arp", "-an"); err == nil {
 		snap.ARP = ParseARP(out)
+	}
+	if out, err := runCmd(5*time.Second, "ndp", "-an"); err == nil {
+		snap.NDP = ParseNDP(out)
+	}
+	if data, err := os.ReadFile("/var/etc/dhcp6c.conf"); err == nil {
+		snap.DHCPv6PD = ParseDHCPv6PD(data, snap.Ifaces)
 	}
 
 	// 6. LLDP neighbors via lldpcli (optional; gracefully skipped if lldpd isn't installed)

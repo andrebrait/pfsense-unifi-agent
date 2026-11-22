@@ -44,7 +44,9 @@ type IfInfo struct {
 	Autoneg    bool
 	IP         string
 	Netmask    string
-	PeerIP     string // For PPPoE point-to-point links
+	PeerIP     string   // For PPPoE point-to-point links
+	IPv6       []string // CIDR strings with zone stripped, e.g. "2001:db8:1::1/64"
+	PeerIPv6   string
 	VLANID     int
 	VLANParent string
 	Counters   IfCounters
@@ -116,8 +118,10 @@ type Snapshot struct {
 	Sys          SysInfo
 	Ifaces       map[string]*IfInfo
 	ARP          []ARPEntry
+	NDP          []ARPEntry
 	LLDP         []LLDPNeighbor
 	Leases       []DHCPLease
+	DHCPv6PD     []string
 	Dpinger      []DpingerStat
 	DefaultGW    string
 	Nameservers  []string
@@ -198,22 +202,22 @@ func BuildPayload(cfg *config.Config, spec models.ModelSpec, snap *Snapshot) (ma
 		return ifname, 1
 	}
 
-	// Group ARP entries by physical port_idx
+	// Group ARP (IPv4) and NDP (IPv6) entries by physical port_idx
 	macTableByPort := make(map[int][]map[string]any)
-	for _, a := range snap.ARP {
+	macTableV6ByPort := make(map[int][]map[string]any)
+	appendNeighbor := func(dst map[int][]map[string]any, a ARPEntry) {
 		parent, vid := resolveParentVLAN(a.Iface)
 		ps, ok := devToPort[parent]
 		if !ok {
-			continue
+			return
 		}
-		// Skip WAN ports from LAN client mac_table
 		if pm, hasPM := portByIdx[ps.PortIdx]; hasPM {
 			role := pm.Role
 			if role == "" {
 				role = ps.DefaultRole
 			}
 			if role == "wan" || role == "wan2" {
-				continue
+				return
 			}
 		}
 		entry := map[string]any{
@@ -225,7 +229,13 @@ func BuildPayload(cfg *config.Config, spec models.ModelSpec, snap *Snapshot) (ma
 		if h := hostByMAC[strings.ToLower(a.MAC)]; h != "" {
 			entry["hostname"] = h
 		}
-		macTableByPort[ps.PortIdx] = append(macTableByPort[ps.PortIdx], entry)
+		dst[ps.PortIdx] = append(dst[ps.PortIdx], entry)
+	}
+	for _, a := range snap.ARP {
+		appendNeighbor(macTableByPort, a)
+	}
+	for _, a := range snap.NDP {
+		appendNeighbor(macTableV6ByPort, a)
 	}
 
 	// Group LLDP neighbors by physical port_idx and build top-level lldp_table
@@ -375,6 +385,9 @@ func BuildPayload(cfg *config.Config, spec models.ModelSpec, snap *Snapshot) (ma
 			if macs := macTableByPort[ps.PortIdx]; len(macs) > 0 {
 				pe["mac_table"] = macs
 			}
+			if macsV6 := macTableV6ByPort[ps.PortIdx]; len(macsV6) > 0 {
+				pe["mac_table_ipv6"] = macsV6
+			}
 		}
 
 		portTable = append(portTable, pe)
@@ -464,19 +477,29 @@ func BuildPayload(cfg *config.Config, spec models.ModelSpec, snap *Snapshot) (ma
 		ifTable = append(ifTable, wEntry)
 
 		cidr := ipMaskToCIDR(wIP, wMask)
+		wanAddrs := make([]string, 0, 1+len(wanLogical.IPv6))
+		if cidr != "" {
+			wanAddrs = append(wanAddrs, cidr)
+		}
+		wanAddrs = append(wanAddrs, wanLogical.IPv6...)
 		netWan := map[string]any{
-			"name":    wanUnifiIf,
-			"ip":      wIP,
-			"netmask": wMask,
-			"up":      wanLogical.Up,
-			"enabled": wanLogical.AdminUp,
-			"mac":     wMAC,
+			"name":     wanUnifiIf,
+			"ip":       wIP,
+			"netmask":  wMask,
+			"up":       wanLogical.Up,
+			"enabled":  wanLogical.AdminUp,
+			"mac":      wMAC,
 			"rx_bytes": wCounters.RxBytes,
 			"tx_bytes": wCounters.TxBytes,
 		}
 		if cidr != "" {
 			netWan["address"] = cidr
-			netWan["addresses"] = []string{cidr}
+		}
+		if len(wanAddrs) > 0 {
+			netWan["addresses"] = wanAddrs
+		}
+		if len(snap.DHCPv6PD) > 0 {
+			netWan["dhcpv6_pd"] = snap.DHCPv6PD
 		}
 		networkTable = append(networkTable, netWan)
 
@@ -509,12 +532,24 @@ func BuildPayload(cfg *config.Config, spec models.ModelSpec, snap *Snapshot) (ma
 		if len(wanDNS) > 1 {
 			configNetWan["dns2"] = wanDNS[1]
 		}
+		if len(snap.DHCPv6PD) > 0 || len(wanLogical.IPv6) > 0 {
+			configNetWan["type_v6"] = "dhcpv6"
+			if wanLogical.PeerIPv6 != "" {
+				configNetWan["gateway_v6"] = wanLogical.PeerIPv6
+			}
+			if len(snap.DHCPv6PD) > 0 {
+				if _, n, err := net.ParseCIDR(snap.DHCPv6PD[0]); err == nil {
+					ones, _ := n.Mask.Size()
+					configNetWan["dhcpv6_pd_size"] = ones
+				}
+			}
+		}
 	}
 
 	// Primary LAN (br0) + VLANs on mapped LAN ports (br<VID>) + extra mapped LAN ports
 	seenNetName := make(map[string]bool)
 	addLanNet := func(brName string, vid int, info *IfInfo) {
-		if info == nil || info.IP == "" || seenNetName[brName] {
+		if info == nil || (info.IP == "" && len(info.IPv6) == 0) || seenNetName[brName] {
 			return
 		}
 		seenNetName[brName] = true
@@ -523,6 +558,11 @@ func BuildPayload(cfg *config.Config, spec models.ModelSpec, snap *Snapshot) (ma
 			mask = "255.255.255.0"
 		}
 		cidr := ipMaskToCIDR(info.IP, mask)
+		addrs := make([]string, 0, 1+len(info.IPv6))
+		if cidr != "" {
+			addrs = append(addrs, cidr)
+		}
+		addrs = append(addrs, info.IPv6...)
 		leaseCount := countLeasesInSubnet(snap.Leases, cidr)
 		ifMAC := strings.ToLower(info.MAC)
 		if ifMAC == "" {
@@ -556,7 +596,9 @@ func BuildPayload(cfg *config.Config, spec models.ModelSpec, snap *Snapshot) (ma
 		}
 		if cidr != "" {
 			netEntry["address"] = cidr
-			netEntry["addresses"] = []string{cidr}
+		}
+		if len(addrs) > 0 {
+			netEntry["addresses"] = addrs
 		}
 		if vid > 1 {
 			netEntry["vlan"] = vid
@@ -663,8 +705,8 @@ func BuildPayload(cfg *config.Config, spec models.ModelSpec, snap *Snapshot) (ma
 			"services/dhcp-servers": 10,
 		},
 		"gw_caps":     0,
-		"usg_caps":    2048,   // PORT_REASSIGNMENT: allows reassigning WAN1/WAN2/LAN ports in UniFi UI
-		"usg2_caps":   131072, // ALL_SWITCH_PORTS_REMAP: required on switch-capable UXGs (UXGA6AA) for WAN remap
+		"usg_caps":    2048,         // PORT_REASSIGNMENT: allows reassigning WAN1/WAN2/LAN ports in UniFi UI
+		"usg2_caps":   131072 | 128, // ALL_SWITCH_PORTS_REMAP | LINK_LOCAL_IN_NETWORK_TABLE
 		"switch_caps": map[string]any{"feature_caps": 0},
 		"has_fan":     false,
 		"overheating": false,

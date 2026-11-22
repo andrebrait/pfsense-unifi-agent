@@ -130,8 +130,11 @@ func cmdShow(cfgPath string) error {
 		fmt.Printf("%-5d %-6s %-7s %-10s %-8s %-8s %s\n", ps.PortIdx, ps.IfName, ps.Media, pm.Device, role, link, detail)
 	}
 
-	fmt.Printf("\nARP entries: %d   LLDP neighbors: %d   Active DHCP leases: %d   dpinger: %d\n",
-		len(snap.ARP), len(snap.LLDP), len(snap.Leases), len(snap.Dpinger))
+	fmt.Printf("\nARP entries: %d   NDP(v6) entries: %d   LLDP neighbors: %d   Active DHCP leases: %d   dpinger: %d\n",
+		len(snap.ARP), len(snap.NDP), len(snap.LLDP), len(snap.Leases), len(snap.Dpinger))
+	if len(snap.DHCPv6PD) > 0 {
+		fmt.Printf("  DHCPv6-PD: %v\n", snap.DHCPv6PD)
+	}
 	for _, n := range snap.LLDP {
 		fmt.Printf("  LLDP %s -> %s (%s port %s)\n", n.LocalIf, n.SystemName, n.ChassisID, n.PortDescr)
 	}

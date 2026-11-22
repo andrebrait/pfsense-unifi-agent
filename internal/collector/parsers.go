@@ -19,6 +19,8 @@ var (
 	reEther     = regexp.MustCompile(`^\s+ether\s+([0-9a-fA-F:]{17})`)
 	reInetP2P   = regexp.MustCompile(`^\s+inet\s+(\d+\.\d+\.\d+\.\d+)\s+-->\s+(\d+\.\d+\.\d+\.\d+)\s+netmask\s+(0x[0-9a-fA-F]+)`)
 	reInet      = regexp.MustCompile(`^\s+inet\s+(\d+\.\d+\.\d+\.\d+)\s+netmask\s+(0x[0-9a-fA-F]+)`)
+	reInet6P2P  = regexp.MustCompile(`^\s+inet6\s+([0-9a-fA-F:]+)(?:%\S+)?\s+-->\s+([0-9a-fA-F:]+)(?:%\S+)?\s+prefixlen\s+(\d+)`)
+	reInet6     = regexp.MustCompile(`^\s+inet6\s+([0-9a-fA-F:]+)(?:%\S+)?\s+prefixlen\s+(\d+)`)
 	reVLAN      = regexp.MustCompile(`^\s+vlan:\s+(\d+)\s+.*?parent interface:\s+(\S+)`)
 	reMedia     = regexp.MustCompile(`^\s+media:\s+(.+)`)
 	reStatus    = regexp.MustCompile(`^\s+status:\s+(.+)`)
@@ -89,6 +91,19 @@ func ParseIfconfig(out string, existing map[string]*IfInfo) map[string]*IfInfo {
 			if cur.IP == "" {
 				cur.IP = m[1]
 				cur.Netmask = hexMaskToDotted(m[2])
+			}
+			continue
+		}
+		if m := reInet6P2P.FindStringSubmatch(line); m != nil {
+			cur.IPv6 = appendUnique(cur.IPv6, m[1]+"/"+m[3])
+			if cur.PeerIPv6 == "" {
+				cur.PeerIPv6 = m[2]
+			}
+			continue
+		}
+		if m := reInet6.FindStringSubmatch(line); m != nil {
+			if m[1] != "::1" {
+				cur.IPv6 = appendUnique(cur.IPv6, m[1]+"/"+m[2])
 			}
 			continue
 		}
@@ -249,6 +264,96 @@ func ParseARP(out string) []ARPEntry {
 		})
 	}
 	return entries
+}
+
+func appendUnique(slice []string, val string) []string {
+	for _, s := range slice {
+		if s == val {
+			return slice
+		}
+	}
+	return append(slice, val)
+}
+
+// ParseNDP parses FreeBSD `ndp -an` output into neighbor entries for port_table[].mac_table_ipv6.
+// Skips permanent local entries, incomplete entries, link-local (fe80::), and multicast (ff00::).
+func ParseNDP(out string) []ARPEntry {
+	var entries []ARPEntry
+	for _, line := range strings.Split(out, "\n") {
+		f := strings.Fields(line)
+		// Format: Neighbor LinklayerAddress Netif Expire S [Flags]
+		if len(f) < 5 || f[0] == "Neighbor" {
+			continue
+		}
+		ipStr := f[0]
+		if idx := strings.IndexByte(ipStr, '%'); idx >= 0 {
+			ipStr = ipStr[:idx]
+		}
+		ip := net.ParseIP(ipStr)
+		if ip == nil || ip.To4() != nil || ip.IsLinkLocalUnicast() || ip.IsMulticast() || ip.IsLoopback() {
+			continue
+		}
+		mac := strings.ToLower(f[1])
+		if len(mac) != 17 || strings.Count(mac, ":") != 5 {
+			continue
+		}
+		if f[3] == "permanent" {
+			continue
+		}
+		entries = append(entries, ARPEntry{
+			IP:    ip.String(),
+			MAC:   mac,
+			Iface: f[2],
+			Age:   0,
+		})
+	}
+	return entries
+}
+
+var (
+	reDhcp6PrefixIf = regexp.MustCompile(`prefix-interface\s+(\S+)\s*\{`)
+	reDhcp6SlaLen   = regexp.MustCompile(`sla-len\s+(\d+)\s*;`)
+)
+
+// ParseDHCPv6PD derives delegated IPv6 prefixes from pfSense's /var/etc/dhcp6c.conf sla-len
+// and the resulting global IPv6 addresses assigned to those LAN interfaces.
+func ParseDHCPv6PD(conf []byte, ifaces map[string]*IfInfo) []string {
+	var prefixes []string
+	var curIf string
+	for _, line := range strings.Split(string(conf), "\n") {
+		if m := reDhcp6PrefixIf.FindStringSubmatch(line); m != nil {
+			curIf = m[1]
+			continue
+		}
+		if curIf == "" {
+			continue
+		}
+		if strings.Contains(line, "}") {
+			curIf = ""
+			continue
+		}
+		if m := reDhcp6SlaLen.FindStringSubmatch(line); m != nil {
+			slaLen, err := strconv.Atoi(m[1])
+			if err != nil || slaLen <= 0 || slaLen >= 64 {
+				continue
+			}
+			pdLen := 64 - slaLen
+			info, ok := ifaces[curIf]
+			if !ok {
+				continue
+			}
+			for _, cidr := range info.IPv6 {
+				ip, _, err := net.ParseCIDR(cidr)
+				if err != nil || ip.To4() != nil || ip.IsLinkLocalUnicast() || ip.IsPrivate() {
+					continue
+				}
+				mask := net.CIDRMask(pdLen, 128)
+				pdNet := (&net.IPNet{IP: ip.Mask(mask), Mask: mask}).String()
+				prefixes = appendUnique(prefixes, pdNet)
+			}
+		}
+	}
+	return prefixes
 }
 
 // ParseLLDP parses `lldpcli -f json show neighbors` output.
