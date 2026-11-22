@@ -477,7 +477,7 @@ func ParseKeaLeases(data []byte, nowUnix int64) []DHCPLease {
 			host = strings.TrimSpace(rec[idxHost])
 		}
 		latest[ip] = rawLease{
-			lease:  DHCPLease{IP: ip, MAC: mac, Hostname: host},
+			lease:  DHCPLease{IP: ip, MAC: mac, Hostname: host, Expire: exp},
 			active: state == 0 && exp > nowUnix && mac != "",
 		}
 	}

@@ -230,8 +230,11 @@ fe80::200:ff:fe00:201%ixl1           02:00:00:00:02:01   ixl1 17h       S
 	if len(p6MacsV6) != 2 {
 		t.Fatalf("expected 2 IPv6 macs on port 6 across VLANs 1/2, got %d: %+v", len(p6MacsV6), p6MacsV6)
 	}
-	// Port 7 (ixl0) -> Zaram SFP DOM
+	// Port 7 (ixl0 + wan_if=pppoe0) -> Zaram SFP DOM + clean pppoe0 counters if present
 	if ports[6]["sfp_vendor"] != "Zaram" || ports[6]["sfp_rxpower"] != "-15.62" {
 		t.Fatalf("expected Zaram SFP DOM on port 7, got %+v", ports[6])
+	}
+	if activeLeases, ok := payload["ipv4_active_leases"].([]map[string]any); !ok || len(activeLeases) != 2 {
+		t.Fatalf("expected 2 ipv4_active_leases, got %#v", payload["ipv4_active_leases"])
 	}
 }

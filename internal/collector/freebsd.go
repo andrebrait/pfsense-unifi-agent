@@ -20,10 +20,15 @@ type FreeBSDCollector struct {
 	Cfg         *config.Config
 	hasPrevCPU  bool
 	prevCPUTime [5]uint64
+	prevTime    time.Time
+	prevBytes   map[string][2]uint64 // [rxBytes, txBytes]
 }
 
 func NewFreeBSDCollector(cfg *config.Config) *FreeBSDCollector {
-	return &FreeBSDCollector{Cfg: cfg}
+	return &FreeBSDCollector{
+		Cfg:       cfg,
+		prevBytes: make(map[string][2]uint64),
+	}
 }
 
 func runCmd(timeout time.Duration, name string, args ...string) (string, error) {
@@ -57,13 +62,26 @@ func (c *FreeBSDCollector) Collect() (*Snapshot, error) {
 		}
 	}
 
-	// 3. 64-bit interface byte/packet/error/drop counters via netstat -ibn
+	// 3. 64-bit interface byte/packet/error/drop counters via netstat -ibn + live rate delta (bits/s)
 	if out, err := runCmd(5*time.Second, "netstat", "-ibn"); err == nil {
+		dt := now.Sub(c.prevTime).Seconds()
 		for name, cnt := range ParseNetstatIBN(out) {
+			if dt > 0.2 && !c.prevTime.IsZero() {
+				if prev, ok := c.prevBytes[name]; ok {
+					if cnt.RxBytes >= prev[0] {
+						cnt.RxRateBPS = uint64(float64(cnt.RxBytes-prev[0]) * 8.0 / dt)
+					}
+					if cnt.TxBytes >= prev[1] {
+						cnt.TxRateBPS = uint64(float64(cnt.TxBytes-prev[1]) * 8.0 / dt)
+					}
+				}
+			}
+			c.prevBytes[name] = [2]uint64{cnt.RxBytes, cnt.TxBytes}
 			if info, ok := snap.Ifaces[name]; ok {
 				info.Counters = cnt
 			}
 		}
+		c.prevTime = now
 	}
 
 	// 4. pfSense config.xml (read-only: interfaces + vlans)

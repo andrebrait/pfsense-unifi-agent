@@ -31,6 +31,8 @@ type IfCounters struct {
 	TxPackets uint64
 	TxErrors  uint64
 	TxBytes   uint64
+	RxRateBPS uint64 // bits/sec (UniFi xbPjw divides port_table rx_rate by 8 for rx_bytes-r)
+	TxRateBPS uint64 // bits/sec
 }
 
 type IfInfo struct {
@@ -72,6 +74,7 @@ type DHCPLease struct {
 	IP       string
 	MAC      string
 	Hostname string
+	Expire   int64
 }
 
 type DpingerStat struct {
@@ -337,13 +340,21 @@ func BuildPayload(cfg *config.Config, spec models.ModelSpec, snap *Snapshot) (ma
 				}
 				pe["full_duplex"] = info.FullDuplex
 				pe["autoneg"] = info.Autoneg
-				pe["rx_bytes"] = info.Counters.RxBytes
-				pe["tx_bytes"] = info.Counters.TxBytes
-				pe["rx_packets"] = info.Counters.RxPackets
-				pe["tx_packets"] = info.Counters.TxPackets
-				pe["rx_errors"] = info.Counters.RxErrors
-				pe["tx_errors"] = info.Counters.TxErrors
-				pe["rx_dropped"] = info.Counters.RxDropped
+				cnt := info.Counters
+				if pm.WanIf != "" {
+					if wi, wok := snap.Ifaces[pm.WanIf]; wok && (wi.Counters.RxBytes > 0 || wi.Counters.TxBytes > 0) {
+						cnt = wi.Counters
+					}
+				}
+				pe["rx_bytes"] = cnt.RxBytes
+				pe["tx_bytes"] = cnt.TxBytes
+				pe["rx_packets"] = cnt.RxPackets
+				pe["tx_packets"] = cnt.TxPackets
+				pe["rx_errors"] = cnt.RxErrors
+				pe["tx_errors"] = cnt.TxErrors
+				pe["rx_dropped"] = cnt.RxDropped
+				pe["rx_rate"] = cnt.RxRateBPS
+				pe["tx_rate"] = cnt.TxRateBPS
 
 				if info.SFP.Found {
 					pe["sfp_found"] = true
@@ -467,6 +478,10 @@ func BuildPayload(cfg *config.Config, spec models.ModelSpec, snap *Snapshot) (ma
 			"nameservers": wanDNS,
 			"rx_bytes":    wCounters.RxBytes,
 			"tx_bytes":    wCounters.TxBytes,
+			"rx_bytes-r":  wCounters.RxRateBPS / 8,
+			"tx_bytes-r":  wCounters.TxRateBPS / 8,
+			"rx_rate":     wCounters.RxRateBPS,
+			"tx_rate":     wCounters.TxRateBPS,
 			"rx_packets":  wCounters.RxPackets,
 			"tx_packets":  wCounters.TxPackets,
 			"rx_errors":   wCounters.RxErrors,
@@ -515,6 +530,10 @@ func BuildPayload(cfg *config.Config, spec models.ModelSpec, snap *Snapshot) (ma
 			"nameservers": wanDNS,
 			"rx_bytes":    wCounters.RxBytes,
 			"tx_bytes":    wCounters.TxBytes,
+			"rx_bytes-r":  wCounters.RxRateBPS / 8,
+			"tx_bytes-r":  wCounters.TxRateBPS / 8,
+			"rx_rate":     wCounters.RxRateBPS,
+			"tx_rate":     wCounters.TxRateBPS,
 			"rx_packets":  wCounters.RxPackets,
 			"tx_packets":  wCounters.TxPackets,
 		}
@@ -747,6 +766,23 @@ func BuildPayload(cfg *config.Config, spec models.ModelSpec, snap *Snapshot) (ma
 			"cidr":         lanCIDR,
 			"dhcp_enabled": len(snap.Leases) > 0,
 		}
+	}
+	if len(snap.Leases) > 0 {
+		activeLeases := make([]map[string]any, 0, len(snap.Leases))
+		for _, l := range snap.Leases {
+			le := map[string]any{
+				"mac": strings.ToLower(l.MAC),
+				"ip":  l.IP,
+			}
+			if l.Hostname != "" {
+				le["hostname"] = l.Hostname
+			}
+			if l.Expire > 0 {
+				le["leaseExpiry"] = l.Expire
+			}
+			activeLeases = append(activeLeases, le)
+		}
+		payload["ipv4_active_leases"] = activeLeases
 	}
 	if uptimeStats != nil {
 		payload["uptime_stats"] = uptimeStats
