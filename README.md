@@ -2,7 +2,7 @@
 
 An inform-only agent that lets a UniFi Network controller adopt a pfSense router as a UniFi gateway.
 
-The agent runs on pfSense, speaks the UniFi inform protocol, and presents the router as a standalone UniFi Gateway (by default a UniFi Gateway Fiber, `UXGA6AA`). Once adopted, the controller shows pfSense like any other UniFi gateway: ports with link state, speed and live traffic, WAN status and latency, CPU and memory, DHCP leases, IPv6 addresses and prefix delegation, and the switches below it in Topology.
+The agent runs on pfSense, speaks the UniFi inform protocol, and presents the router as a standalone UniFi Gateway (by default a UniFi Gateway Fiber, `UXGA6AA`). Once adopted, the controller shows pfSense like any other UniFi gateway: ports with link state, speed and live traffic, WAN status and latency, CPU and memory, DHCP leases, IPv6 addresses and prefix delegation, the clients and switches behind each port, and LLDP neighbors.
 
 **pfSense stays in charge.** The agent reports telemetry and never applies anything the controller sends. Firewall rules, interfaces, DHCP and VPN settings stay in pfSense, and changes made in UniFi only update the controller's database.
 
@@ -23,7 +23,7 @@ The agent runs on pfSense, speaks the UniFi inform protocol, and presents the ro
 | Wired clients per port and VLAN, with hostnames | `arp -an`, `ndp -an`, Kea DHCPv4 leases |
 | Networks with active DHCP lease counts | Interface addresses, Kea DHCPv4 leases |
 | IPv6 addresses and delegated prefixes | `ifconfig`, the DHCPv6 client |
-| Switches below the gateway in Topology | `lldpcli` (optional) |
+| LLDP neighbors per port | `lldpcli` (optional) |
 | CPU, memory, load and uptime; temperature when a sensor exists | `sysctl` |
 
 ## Requirements
@@ -31,7 +31,7 @@ The agent runs on pfSense, speaks the UniFi inform protocol, and presents the ro
 - pfSense on amd64. Developed and tested on pfSense Plus 26.07. Recent pfSense CE releases should work, but have not been tested.
 - A UniFi Network 10.x controller (a self-hosted Network application or UniFi OS Server) that pfSense can reach on the inform port (TCP 8080 by default).
 - Kea as the DHCPv4 server, for lease counts and client hostnames. With ISC DHCP the agent still works but reports no leases.
-- Optional: the **lldpd** package (**System → Package Manager**), enabled on your LAN interfaces, so neighbouring switches appear under the gateway in Topology.
+- Optional: the **lldpd** package (**System → Package Manager**), enabled on your LAN interfaces, so each port lists its LLDP neighbors. Topology does not need it: the controller places devices from the MAC addresses each port reports and the uplinks your UniFi devices report.
 - Go 1.24 or newer to build. The agent has no dependencies outside the Go standard library.
 
 ## Supported gateway models
