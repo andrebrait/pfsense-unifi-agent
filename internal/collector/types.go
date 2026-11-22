@@ -627,11 +627,25 @@ func BuildPayload(cfg *config.Config, spec models.ModelSpec, snap *Snapshot) (ma
 		memPct = float64(snap.Sys.MemUsed) * 100.0 / float64(snap.Sys.MemTotal)
 	}
 
+	// Top-level "ip" on a UniFi UXG gateway is the active WAN1 IP (displayed as IP Address (WAN1));
+	// IP Address (LAN) is derived from br0 / lan_ip. Fall back to LAN IP when WAN is down or cfg.IP is forced.
+	topIP := ip
+	topMask := netmask
+	if cfg.IP == "" && wanLogical != nil && wanLogical.IP != "" {
+		topIP = wanLogical.IP
+		if wanLogical.Netmask != "" {
+			topMask = wanLogical.Netmask
+		} else {
+			topMask = "255.255.255.255"
+		}
+	}
+
 	payload := map[string]any{
 		"mac":           mac,
 		"serial":        strings.ReplaceAll(mac, ":", ""),
-		"ip":            ip,
-		"netmask":       netmask,
+		"ip":            topIP,
+		"netmask":       topMask,
+		"lan_ip":        ip,
 		"hostname":      hostname,
 		"model":         spec.Model,
 		"model_display": spec.ModelDisplay,

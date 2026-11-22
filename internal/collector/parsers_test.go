@@ -180,8 +180,8 @@ func TestParsersAndBuildPayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildPayload error: %v", err)
 	}
-	if mac != "02:00:00:00:01:02" || payload["ip"] != "10.0.0.1" {
-		t.Fatalf("unexpected identity mac=%s ip=%v", mac, payload["ip"])
+	if mac != "02:00:00:00:01:02" || payload["ip"] != "203.0.113.10" || payload["lan_ip"] != "10.0.0.1" {
+		t.Fatalf("unexpected identity mac=%s ip=%v lan_ip=%v", mac, payload["ip"], payload["lan_ip"])
 	}
 	ports := payload["port_table"].([]map[string]any)
 	if len(ports) != 7 {

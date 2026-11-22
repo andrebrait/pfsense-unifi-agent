@@ -16,7 +16,6 @@ load_rc_config $name
 
 pidfile="/var/run/${name}.pid"
 command="/usr/sbin/daemon"
-procname="/usr/local/sbin/pfsense-unifi-agent"
-command_args="-f -P ${pidfile} -r -T ${name} ${procname} run -config ${pfsense_unifi_agent_config}"
+command_args="-f -P ${pidfile} -r -T ${name} /usr/local/sbin/pfsense-unifi-agent run -config ${pfsense_unifi_agent_config}"
 
 run_rc_command "$1"
