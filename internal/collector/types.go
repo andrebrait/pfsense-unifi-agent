@@ -322,6 +322,9 @@ func BuildPayload(cfg *config.Config, spec models.ModelSpec, snap *Snapshot) (ma
 				pe["enable"] = info.AdminUp
 				pe["up"] = info.Up
 				pe["speed"] = info.Speed
+				if info.Speed >= 10000 && ps.SpeedCaps&models.Speed10000F == 0 {
+					pe["speed_caps"] = ps.SpeedCaps | models.Speed5000F | models.Speed10000F
+				}
 				pe["full_duplex"] = info.FullDuplex
 				pe["autoneg"] = info.Autoneg
 				pe["rx_bytes"] = info.Counters.RxBytes

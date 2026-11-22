@@ -329,6 +329,7 @@ func ParseLLDP(data []byte) ([]LLDPNeighbor, error) {
 func ParseKeaLeases(data []byte, nowUnix int64) []DHCPLease {
 	r := csv.NewReader(bytes.NewReader(data))
 	r.FieldsPerRecord = -1
+	r.LazyQuotes = true
 	header, err := r.Read()
 	if err != nil {
 		return nil

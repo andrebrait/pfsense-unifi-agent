@@ -80,10 +80,10 @@ const sampleLLDP = `{
 }`
 
 const sampleKea = `address,hwaddr,client_id,valid_lifetime,expire,subnet_id,fqdn_fwd,fqdn_rev,hostname,state,user_context,pool_id
-10.0.1.1,02:00:00:00:04:01,01:02:00:00:00:04:01,7200,2000000000,1,0,0,nas-box,0,{},0
-10.0.1.2,02:00:00:00:04:02,,7200,1000,1,0,0,expired-host,0,{},0
-10.1.0.50,02:00:00:00:ee:02,,7200,2000000000,2,0,0,iot-sensor,0,{},0
-10.0.1.1,02:00:00:00:04:01,01:02:00:00:00:04:01,7200,2000001000,1,0,0,nas-box-new,0,{},0
+10.0.1.1,02:00:00:00:04:01,01:02:00:00:00:04:01,7200,2000000000,1,0,0,nas-box,0,{ "ISC": { "binding-variables": { "domain-name": "home" } } },0
+10.0.1.2,02:00:00:00:04:02,,7200,1000,1,0,0,expired-host,0,{ "ISC": { "binding-variables": { "domain-name": "home" } } },0
+10.1.0.50,02:00:00:00:ee:02,,7200,2000000000,2,0,0,iot-sensor,0,{ "ISC": { "binding-variables": { "domain-name": "home" } } },0
+10.0.1.1,02:00:00:00:04:01,01:02:00:00:00:04:01,7200,2000001000,1,0,0,nas-box-new,0,{ "ISC": { "binding-variables": { "domain-name": "home" } } },0
 `
 
 const samplePfXML = `<?xml version="1.0"?>

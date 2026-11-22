@@ -117,7 +117,14 @@ func cmdShow(cfgPath string) error {
 				}
 			}
 			if info.SFP.Found {
-				detail = fmt.Sprintf("%s [SFP: %s %s %sC %sdBm]", detail, info.SFP.Vendor, info.SFP.Part, info.SFP.Temperature, info.SFP.RxPower)
+				sfpDesc := fmt.Sprintf("%s %s", info.SFP.Vendor, info.SFP.Part)
+				if info.SFP.Temperature != "" {
+					sfpDesc += " " + info.SFP.Temperature + "C"
+				}
+				if info.SFP.RxPower != "" {
+					sfpDesc += " " + info.SFP.RxPower + "dBm"
+				}
+				detail = fmt.Sprintf("%s [SFP: %s]", detail, sfpDesc)
 			}
 		}
 		fmt.Printf("%-5d %-6s %-7s %-10s %-8s %-8s %s\n", ps.PortIdx, ps.IfName, ps.Media, pm.Device, role, link, detail)
